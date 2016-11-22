@@ -66,6 +66,14 @@ def example_select_current_time(conn):
         # catch any database exception and return failure status
         return 1, None
 
+# test code blocks
+
+# # test data in the database
+# SQL = "SELECT * FROM users"
+# cur.execute(SQL)
+# res = cur.fetchall()
+# print(res)
+
 
 # Admin APIs
 
@@ -173,12 +181,6 @@ def signup(conn, uname, pwd):
         data = (uname, pwd)
         cur.execute(SQL, data)
         conn.commit()
-        # return the status and result
-        # test data in the database
-        SQL = "SELECT * FROM users"
-        cur.execute(SQL)
-        res = cur.fetchall()
-        print(res)
         return 0, None
     except psy.DatabaseError, e:
         # catch any database exception and return failure status
@@ -202,21 +204,15 @@ def login(conn, uname, pwd):
         # validation ??
 
         cur = conn.cursor()
-        # test data in the database
-        SQL = "SELECT * FROM users"
-        cur.execute(SQL)
-        res = cur.fetchall()
-        print(res)
         # check exist
         SQL = "SELECT * FROM users WHERE username = %s;"
         data = (uname, )
         cur.execute(SQL, data)
         res = cur.fetchone()
-        print(res)
         if res == None:
             return 1, None
         # check password matching
-        if res[0][1] != pwd:
+        if res[1] != pwd:
             return 2, None
         return 0, None
     except psy.DatabaseError, e:
