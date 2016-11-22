@@ -80,7 +80,62 @@ def reset_db(conn):
         (0, None)   Success
         (1, None)   Failure
     """
-    return 1, None
+    commands = (
+        """
+        DROP TABLE IF EXISTS tags, tagnames, likes, papers, users
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS users(
+            username VARCHAR(50) NOT NULL,
+            password VARCHAR(32) NOT NULL,
+            PRIMARY KEY(username)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS papers(
+            pid  SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            title VARCHAR(50),
+            begin_time TIMESTAMP NOT NULL,
+            description VARCHAR(500),
+            data TEXT,
+            FOREIGN KEY(username) REFERENCES users ON DELETE CASCADE
+        );
+        """,
+        """
+        CREATE INDEX paper_text_idx ON papers USING gin(to_tsvector('english', data))
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS tagnames(
+            tagname VARCHAR(50) NOT NULL,
+            PRIMARY KEY(tagname)
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS likes(
+            pid INT NOT NULL,
+            username VARCHAR(50) NOT NULL,
+            like_time TIMESTAMP NOT NULL,
+            PRIMARY KEY(pid, username),
+            FOREIGN KEY(pid) REFERENCES papers ON DELETE CASCADE,
+            FOREIGN KEY(username) REFERENCES users ON DELETE CASCADE
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS tags(
+            pid INT NOT NULL,
+            tagname VARCHAR(50) NOT NULL,
+            PRIMARY KEY(pid, tagname),
+            FOREIGN KEY(pid) REFERENCES papers ON DELETE CASCADE,
+            FOREIGN KEY(tagname) REFERENCES tagnames ON DELETE CASCADE
+        );
+        """,
+    )
+    cur = conn.cursor()
+    for command in commands:
+        cur.execute(command)
+    conn.commit()
+    return 0, None
 
 
 # Basic APIs
@@ -100,7 +155,34 @@ def signup(conn, uname, pwd):
         (1, None)   Failure -- Username is used
         (2, None)   Failure -- Other errors
     """
-    return 1, None
+    try:
+        # username validation (size and chars)
+        # if len(uname) > 50:
+        #     return 2, None
+
+        cur = conn.cursor()
+        # check exist or not
+        SQL = "SELECT username FROM users WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        res = cur.fetchone()
+        if res != None:
+            return 1, None
+        # insert new user
+        SQL = "INSERT INTO users VALUES (%s, %s);"
+        data = (uname, pwd)
+        cur.execute(SQL, data)
+        conn.commit()
+        # return the status and result
+        # test data in the database
+        SQL = "SELECT * FROM users"
+        cur.execute(SQL)
+        res = cur.fetchall()
+        print(res)
+        return 0, None
+    except psy.DatabaseError, e:
+        # catch any database exception and return failure status
+        return 2, None
 
 
 def login(conn, uname, pwd):
@@ -116,7 +198,30 @@ def login(conn, uname, pwd):
         (2, None)   Failure -- Password incorrect
         (3, None)   Failure -- Other errors
     """
-    return 1, None
+    try:
+        # validation ??
+
+        cur = conn.cursor()
+        # test data in the database
+        SQL = "SELECT * FROM users"
+        cur.execute(SQL)
+        res = cur.fetchall()
+        print(res)
+        # check exist
+        SQL = "SELECT * FROM users WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        res = cur.fetchone()
+        print(res)
+        if res == None:
+            return 1, None
+        # check password matching
+        if res[0][1] != pwd:
+            return 2, None
+        return 0, None
+    except psy.DatabaseError, e:
+        return 3, None
+
 
 # Event related
 
