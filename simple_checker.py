@@ -201,7 +201,7 @@ if __name__ == "__main__":
         try:
             status, res = db_wrapper_debug(func, args)
             if status != SUCCESS:
-                status_error(funcs.get_likes,)
+                status_error(func,)
             else:
                 if ans != res:
                     error_message(func, "expect %s but return %s" % (ans, res))

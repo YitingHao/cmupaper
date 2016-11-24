@@ -1,6 +1,6 @@
 """
-Name:
-AndrewID:
+Name: Yiting Hao
+AndrewID: yitingh
 """
 
 import psycopg2 as psy
@@ -42,6 +42,15 @@ General rules:
 """
 
 
+# try:
+#     cur = conn.cursor()
+
+#     # conn.commit()
+#     return 0, None
+# except psy.DatabaseError, e:
+#     return 1, None
+# return 1, None
+
 def example_select_current_time(conn):
     """
     Example: Get current timestamp from the database
@@ -65,14 +74,6 @@ def example_select_current_time(conn):
     except psy.DatabaseError, e:
         # catch any database exception and return failure status
         return 1, None
-
-# test code blocks
-
-# # test data in the database
-# SQL = "SELECT * FROM users"
-# cur.execute(SQL)
-# res = cur.fetchall()
-# print(res)
 
 
 # Admin APIs
@@ -240,6 +241,40 @@ def add_new_paper(conn, uname, title, desc, text, tags):
                     Return the pid of the newly inserted paper in the res field of the return value
         (1, None)   Failure
     """
+    try:
+        cur = conn.cursor()
+        # check user exist      # do we need to do this?
+        SQL = "SELECT * FROM users WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        res = cur.fetchone()
+        if res == None:
+            return 1, None
+        # insert into papers table
+        SQL = "INSERT INTO papers (username, title, begin_time, description, data) \
+               VALUES (%s, %s, %s, %s, %s) RETURNING pid;"
+        data = (uname, title, datetime.now(), desc, text)
+        cur.execute(SQL, data)
+        pid = cur.fetchone()[0]
+        for tag in tags:
+            # check exist
+            SQL = "SELECT * FROM tagnames WHERE tagname = %s;"
+            data = (tag, )
+            cur.execute(SQL, data)
+            res = cur.fetchone()
+            # insert if not exist
+            if res == None:
+                SQL = "INSERT INTO tagnames VALUES (%s);"
+                data = (tag, )
+                cur.execute(SQL, data)
+            # insert into tags table
+            SQL = "INSERT INTO tags VALUES (%s, %s);"
+            data = (pid, tag)
+            cur.execute(SQL, data)
+        conn.commit()
+        return 0, pid
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
@@ -253,7 +288,11 @@ def delete_paper(conn, pid):
         (0, None)   Success
         (1, None)   Failure
     """
-    return 1, None
+    try:
+        cur = conn.cursor()
+
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_paper_tags(conn, pid):
@@ -289,7 +328,24 @@ def like_paper(conn, uname, pid):
         (0, None)   Success
         (1, None)   Failure
     """
-    return 1, None
+    try:
+        # do we need to confirm uname and pid exist ? Maybe not, since it can handle by database error
+        cur = conn.cursor()
+        # check not his/her own paper
+        SQL = "SELECT pid FROM papers WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        res = cur.fetchall()
+        # is his/her own paper
+        if (pid, ) in res:
+            return 1, None
+        SQL = "INSERT INTO likes VALUES (%s, %s, %s);"
+        data = (pid, uname, datetime.now())
+        cur.execute(SQL, data)
+        conn.commit()
+        return 0, None
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def unlike_paper(conn, uname, pid):
@@ -318,7 +374,19 @@ def get_likes(conn, pid):
         (0, like_count)     Success, retval should be an integer of like count
         (1, None)           Failure
     """
-    return 1, None
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT COUNT(*) FROM likes WHERE pid = %s;"
+        data = (pid, )
+        cur.execute(SQL, data)
+        res = cur.fetchone()[0]
+        print(res)
+        print("no exception")
+        return 0, res
+    except psy.DatabaseError, e:
+        print("exception")
+        return 1, None
+
 
 # Search related
 
@@ -348,10 +416,19 @@ def get_timeline(conn, uname, count = 10):
                 ]
             )
 
-
-        (1, None)
-            Failure
+        (1, None) Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT pid, username, title, begin_time, description FROM papers \
+               WHERE username = %s \
+               ORDER BY begin_time DESC, pid ASC \
+               LIMIT %s;"
+        data = (uname, count)
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
@@ -370,6 +447,16 @@ def get_timeline_all(conn, count = 10):
         (1, None)
             Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT pid, username, title, begin_time, description FROM papers \
+               ORDER BY begin_time DESC, pid ASC \
+               LIMIT %s;"
+        data = (count, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
@@ -390,6 +477,27 @@ def get_most_popular_papers(conn, begin_time, count = 10):
         (1, None)
             Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT papers.pid AS pid, \
+                      papers.username AS username, \
+                      papers.title AS title, \
+                      papers.begin_time AS begin_time, \
+                      papers.description AS description \
+               FROM papers INNER JOIN ( \
+                      SELECT pid, COUNT(*) AS cnt \
+                      FROM likes \
+                      GROUP BY pid \
+                    ) AS likecnt ON likecnt.pid = papers.pid \
+               WHERE begin_time >= %s \
+               ORDER BY likecnt.cnt DESC, papers.pid ASC \
+               LIMIT %s;"
+        data = (begin_time, count)
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        print("exception")
+        return 1, None
     return 1, None
 
 
@@ -409,6 +517,32 @@ def get_recommend_papers(conn, uname, count = 10):
         (1, None)
             Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT papers.pid AS pid, \
+                      papers.username AS username, \
+                      papers.title AS title, \
+                      papers.begin_time AS begin_time, \
+                      papers.description AS description \
+               FROM papers INNER JOIN ( \
+                      SELECT pid, COUNT(*) AS cnt_like FROM likes \
+                      WHERE username IN ( \
+                            SELECT DISTINCT username FROM likes \
+                            WHERE username != %(uname)s \
+                            AND pid IN (SELECT pid FROM likes WHERE username = %(uname)s)) \
+                      AND pid NOT IN (SELECT pid FROM likes WHERE username = %(uname)s) \
+                      GROUP BY pid \
+               ) AS recommend_paper \
+               ON recommend_paper.pid = papers.pid \
+               ORDER BY recommend_paper.cnt_like DESC, papers.pid ASC \
+               LIMIT %(count)s;"
+        data_dict = {}
+        data_dict['uname'] = uname
+        data_dict['count'] = count
+        cur.execute(SQL, data_dict)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
@@ -428,7 +562,22 @@ def get_papers_by_tag(conn, tag, count = 10):
         (1, None)
             Failure
     """
-    return 1, None
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT papers.pid AS pid, \
+                      papers.username AS username, \
+                      papers.title AS title, \
+                      papers.begin_time AS begin_time, \
+                      papers.description AS description \
+               FROM papers INNER JOIN tags ON papers.pid = tags.pid \
+               WHERE tags.tagname = %s \
+               ORDER BY begin_time DESC, pid ASC \
+               LIMIT %s;"
+        data = (tag, count)
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_papers_by_keyword(conn, keyword, count = 10):
@@ -447,6 +596,21 @@ def get_papers_by_keyword(conn, keyword, count = 10):
         (1, None)
             Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT pid, username, title, begin_time, description FROM papers \
+               WHERE title LIKE %(like)s OR \
+                     description LIKE %(like)s OR \
+                     data LIKE %(like)s \
+               ORDER BY begin_time DESC, pid ASC \
+               LIMIT %(count)s;"
+        data_dict = {}
+        data_dict['like'] = '%' + keyword + '%'
+        data_dict['count'] = count
+        cur.execute(SQL, data_dict)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
@@ -466,6 +630,22 @@ def get_papers_by_liked(conn, uname, count = 10):
         (1, None)
             Failure
     """
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT papers.pid AS pid, \
+                      papers.username AS username, \
+                      papers.title AS title, \
+                      papers.begin_time AS begin_time, \
+                      papers.description AS description \
+               FROM papers INNER JOIN likes ON papers.pid = likes.pid \
+               WHERE likes.username = %s \
+               ORDER BY papers.begin_time DESC, papers.pid ASC \
+               LIMIT %s;"
+        data = (uname, count)
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
     return 1, None
 
 
