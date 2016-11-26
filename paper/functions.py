@@ -49,7 +49,7 @@ General rules:
 #     return 0, None
 # except psy.DatabaseError, e:
 #     return 1, None
-# return 1, None
+
 
 def example_select_current_time(conn):
     """
@@ -288,9 +288,13 @@ def delete_paper(conn, pid):
         (0, None)   Success
         (1, None)   Failure
     """
+    # need modifications
     try:
         cur = conn.cursor()
-
+        SQL = "DELETE FROM papers WHERE pid = %s;"
+        data = (pid, )
+        cur.execute(SQL, data)
+        return 0, None
     except psy.DatabaseError, e:
         return 1, None
 
@@ -310,7 +314,22 @@ def get_paper_tags(conn, pid):
 
         (1, None)                   Failure
     """
-    return 1, None
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT tagname FROM tags \
+               WHERE pid = %s \
+               ORDER BY tagname ASC;"
+        data = (pid, )
+        cur.execute(SQL, data)
+        tags = cur.fetchall()
+        val = []
+        for tag in tags:
+            val.append(tag[0])
+        return 0, val
+    except psy.DatabaseError, e:
+        return 1, None
+
 
 # Vote related
 
@@ -361,7 +380,19 @@ def unlike_paper(conn, uname, pid):
         (0, None)   Success
         (1, None)   Failure
     """
-    return 1, None
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT * FROM likes WHERE username = %s AND pid = %s;"
+        data = (uname, pid)
+        cur.execute(SQL, data)
+        if cur.fetchall() == None:
+            return 1, None
+        SQL = "DELETE FROM likes WHERE username = %s AND pid = %s;"
+        cur.execute(SQL, data)
+        return 0, None
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_likes(conn, pid):
@@ -379,10 +410,11 @@ def get_likes(conn, pid):
         SQL = "SELECT COUNT(*) FROM likes WHERE pid = %s;"
         data = (pid, )
         cur.execute(SQL, data)
-        res = cur.fetchone()[0]
-        print(res)
-        print("no exception")
-        return 0, res
+        cnt = 0
+        res = cur.fetchone()
+        if res != None:
+            cnt = res[0]
+        return 0, cnt
     except psy.DatabaseError, e:
         print("exception")
         return 1, None
@@ -668,7 +700,21 @@ def get_most_active_users(conn, count = 1):
         (1, None)
             Failure
     """
-    return 1, None
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT username, COUNT(*) AS cnt FROM papers \
+               GROUP BY username \
+               ORDER BY cnt DESC, username ASC \
+               LIMIT %s;"
+        data = (count, )
+        cur.execute(SQL, data)
+        res = cur.fetchall()
+        val = []
+        for t in res:
+            val.append(t[0])
+        return 0, val
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_most_popular_tags(conn, count = 1):
@@ -687,7 +733,17 @@ def get_most_popular_tags(conn, count = 1):
         (1, None)
             Failure
     """
-    return 1, None
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT tagname, COUNT(*) AS cnt FROM tags \
+               GROUP BY tagname \
+               ORDER BY cnt DESC, tagname ASC \
+               LIMIT %s;"
+        data = (count, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_most_popular_tag_pairs(conn, count = 1):
@@ -707,7 +763,20 @@ def get_most_popular_tag_pairs(conn, count = 1):
         (1, None)
             Failure
     """
-    return 1, None
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT t1.tagname AS tag1, t2.tagname AS tag2, COUNT(*) AS cnt \
+               FROM tags AS t1 INNER JOIN tags AS t2 ON t1.pid = t2.pid \
+               WHERE t1.tagname < t2.tagname \
+               GROUP BY t1.tagname, t2.tagname \
+               ORDER BY cnt DESC, tag1 ASC, tag2 ASC \
+               LIMIT %s;"
+        data = (count, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchall()
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_number_papers_user(conn, uname):
@@ -722,7 +791,15 @@ def get_number_papers_user(conn, uname):
         (1, None)
             Failure
     """
-    return 1, None
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT COUNT(*) AS cnt FROM papers WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchone()[0]
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_number_liked_user(conn, uname):
@@ -737,7 +814,15 @@ def get_number_liked_user(conn, uname):
         (1, None)
             Failure
     """
-    return 1, None
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT COUNT(*) FROM likes WHERE username = %s;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchone()[0]
+    except psy.DatabaseError, e:
+        return 1, None
 
 
 def get_number_tags_user(conn, uname):
@@ -754,5 +839,15 @@ def get_number_tags_user(conn, uname):
         (1, None)
             Failure
     """
-    return 1, None
-
+    # need modifications
+    try:
+        cur = conn.cursor()
+        SQL = "SELECT COUNT(*) FROM ( \
+                    SELECT DISTINCT tagname FROM tags \
+                    WHERE pid IN (SELECT pid FROM papers WHERE username = %s) \
+               ) AS dist_tags;"
+        data = (uname, )
+        cur.execute(SQL, data)
+        return 0, cur.fetchone()[0]
+    except psy.DatabaseError, e:
+        return 1, None
