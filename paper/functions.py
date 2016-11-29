@@ -6,6 +6,7 @@ AndrewID: yitingh
 import psycopg2 as psy
 
 from datetime import datetime
+# why timezone here
 from pytz import timezone
 from constants import *
 
@@ -165,10 +166,6 @@ def signup(conn, uname, pwd):
         (2, None)   Failure -- Other errors
     """
     try:
-        # username validation (size and chars)
-        # if len(uname) > 50:
-        #     return 2, None
-
         cur = conn.cursor()
         # check exist or not
         SQL = "SELECT username FROM users WHERE username = %s;"
@@ -184,7 +181,6 @@ def signup(conn, uname, pwd):
         conn.commit()
         return 0, None
     except psy.DatabaseError, e:
-        # catch any database exception and return failure status
         return 2, None
 
 
@@ -362,6 +358,8 @@ def like_paper(conn, uname, pid):
         data = (pid, uname, datetime.now())
         cur.execute(SQL, data)
         conn.commit()
+        print(datetime.now())
+        # print(datetime.utcnow())
         return 0, None
     except psy.DatabaseError, e:
         return 1, None
